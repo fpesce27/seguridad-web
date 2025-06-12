@@ -11,7 +11,7 @@ Esta es una aplicación web intencionalmente vulnerable para fines educativos, d
 
 ### 2. Insecure Design (A04:2021)
 - Endpoint `/admin/logs` protegido solo por el rol en el token
-- No requiere autenticación adicional
+- No requiere autenticación adicional.
 - Permite acceso a logs sensibles con solo modificar el token
 
 ### 3. Security Logging and Monitoring Failures (A09:2021)
