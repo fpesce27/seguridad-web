@@ -1,41 +1,45 @@
-# Aplicación Web Vulnerable - TP Seguridad
+# Sistema Educativo Vulnerable
 
-Esta es una aplicación web intencionalmente vulnerable para fines educativos, diseñada para demostrar cómo las vulnerabilidades pueden encadenarse para comprometer un sistema completo.
+Este es un sistema educativo intencionalmente vulnerable diseñado para fines educativos y de práctica de seguridad. El sistema incluye varias vulnerabilidades comunes que pueden ser explotadas para aprender sobre seguridad web.
 
-## Vulnerabilidades Implementadas
+## Características del Sistema
 
-### 1. Broken Access Control (A01:2021)
-- El token JWT contiene el rol del usuario y puede ser modificado manualmente
-- El servidor no valida correctamente la firma del token
-- Clave secreta JWT débil y predecible
+- Sistema de autenticación con diferentes roles (admin, monitor, estudiante, auditor)
+- Gestión de notas de estudiantes
+- Sistema de auditoría
+- Sistema de logs
+- Interfaz web moderna con Bootstrap
 
-### 2. Insecure Design (A04:2021)
-- Endpoint `/admin/logs` protegido solo por el rol en el token
-- No requiere autenticación adicional.
-- Permite acceso a logs sensibles con solo modificar el token
+## Vulnerabilidades Intencionales
 
-### 3. Security Logging and Monitoring Failures (A09:2021)
-- Los logs contienen información sensible (hashes de contraseñas)
+### 1. SQL Injection en Login
+El sistema utiliza consultas SQL sin parametrizar, permitiendo inyección SQL en el login:
+```sql
+' OR '1'='1
+```
+
+### 2. SQL Injection en Formulario de Auditoría
+El endpoint `/audit` es vulnerable a SQL injection y permite ejecutar múltiples statements. Ejemplo:
+```sql
+'); UPDATE grades SET grade = 10 WHERE student = 'Juan'; --
+```
+
+### 3. Almacenamiento Inseguro de Contraseñas
+- Uso de MD5 con salt estático
+- Las contraseñas se almacenan con un hash débil
+- El salt es predecible y estático
+
+### 4. Tokens JWT Inseguros
+- No hay expiración de tokens
+- Algoritmo de firma débil
+- Secret key predecible
+
+### 5. Logging Inseguro
+- Almacenamiento de logs en memoria
+- Registro de información sensible
 - No hay rotación de logs
-- Los logs son accesibles sin autenticación adecuada
 
-### 4. Cryptographic Failures (A02:2021)
-- Uso de MD5 para hashing de contraseñas
-- Algoritmo débil y vulnerable a ataques de fuerza bruta
-- No se utiliza salt en el hashing
-
-## Cadena de Explotación
-
-1. El atacante intercepta un token JWT de un usuario normal
-2. Modifica el rol en el token a "admin"
-3. Accede al endpoint `/admin/logs` con el token modificado
-4. Obtiene hashes de contraseñas de los logs
-5. Utiliza herramientas de cracking para obtener las contraseñas en texto plano
-6. Accede a cuentas reales con las credenciales obtenidas
-
-## Instalación y Ejecución
-
-### Opción 1: Instalación Local
+## Cómo Ejecutar
 
 1. Instalar dependencias:
 ```bash
@@ -49,30 +53,75 @@ python app.py
 
 3. Acceder a http://localhost:5001
 
-### Opción 2: Usando Docker
-
-1. Construir la imagen:
-```bash
-docker build -t vulnerable-app .
-```
-
-2. Ejecutar el contenedor:
-```bash
-docker run -p 5001:5001 vulnerable-app
-```
-
-3. Acceder a http://localhost:5001
-
 ## Credenciales de Prueba
 
-- Usuario normal:
-  - Username: user1
-  - Password: password123
+- Admin: admin/admin
+- Monitor: monitor/password
+- Estudiante: Juan/password
+- Auditor: auditor1/password
 
-- Administrador:
-  - Username: admin
-  - Password: admin123
+## Ejemplos de Explotación
 
-## Advertencia
+### SQL Injection en Auditoría
+1. Iniciar sesión como auditor1/password
+2. En el formulario de auditoría, usar el payload:
+```sql
+'); UPDATE grades SET grade = 10 WHERE student = 'Juan'; --
+```
+3. Esto modificará todas las notas de Juan a 10
 
-Esta aplicación es intencionalmente vulnerable y debe usarse SOLO en un entorno controlado para fines educativos. No debe desplegarse en producción ni en entornos accesibles públicamente. 
+### Ver Todas las Notas
+```sql
+'); SELECT * FROM grades; --
+```
+
+### Ver Todos los Usuarios
+```sql
+'); SELECT * FROM users; --
+```
+
+### Modificar Notas de Otros Estudiantes
+```sql
+'); UPDATE grades SET grade = 10 WHERE student = 'Juan'; --
+```
+
+### Eliminar Todos los Reportes
+```sql
+'); DELETE FROM audit_reports; --
+```
+
+## Estructura de la Base de Datos
+
+### Tabla users
+- username (TEXT)
+- password_hash (TEXT)
+- role (TEXT)
+
+### Tabla grades
+- id (INTEGER)
+- student (TEXT)
+- subject (TEXT)
+- grade (INTEGER)
+
+### Tabla audit_reports
+- id (INTEGER)
+- auditor (TEXT)
+- report (TEXT)
+- timestamp (DATETIME)
+
+## Notas de Seguridad
+
+⚠️ **ADVERTENCIA**: Este sistema es intencionalmente vulnerable y NO debe ser utilizado en un entorno de producción. Está diseñado únicamente para fines educativos y de práctica de seguridad.
+
+## Mejores Prácticas que NO se Implementan
+
+1. Uso de consultas parametrizadas
+2. Almacenamiento seguro de contraseñas (bcrypt, Argon2)
+3. Tokens JWT seguros con expiración
+4. Logging seguro
+5. Validación de entrada
+6. Protección contra CSRF
+7. Headers de seguridad
+8. Rate limiting
+9. Sanitización de datos
+10. Control de acceso basado en roles (RBAC) seguro 

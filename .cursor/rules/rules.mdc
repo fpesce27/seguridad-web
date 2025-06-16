@@ -1,0 +1,28 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+---
+description: Proyecto TP Seguridad Web – app vulnerable con vulnerabilidades encadenadas
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# Vulnerabilidades encadenadas
+
+1. **Manipulación de rol en token (Broken Access Control)**  
+   El campo `role` del token no se firma ni valida correctamente, permitiendo cambiar `user` → `admin`. :contentReference[oaicite:6]{index=6}
+
+2. **Acceso no autorizado a logs (Insecure Design)**  
+   Existe un endpoint expuesto (`/admin/logs`, `/logs/view`) sin controles robustos, accesible tras manipular el rol. :contentReference[oaicite:7]{index=7}
+
+3. **Registro de credenciales en logs (Security Logging and Monitoring Failures)**  
+   Los logs almacenan nombres de usuario y hashes de contraseña; expone información sensible. :contentReference[oaicite:8]{index=8}
+
+4. **Crackeo de hashes débiles (Cryptographic Failures)**  
+   Se usan algoritmos débiles (MD5/SHA1), facilitando recuperación de contraseñas por fuerza bruta o tablas rainbow. :contentReference[oaicite:9]{index=9}
+
+5. **Escalada de privilegios final**  
+   Con contraseñas crackeadas, el atacante ingresa a cuentas reales y completa la cadena de explotación. :contentReference[oaicite:10]{index=10}
