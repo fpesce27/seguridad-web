@@ -1,46 +1,53 @@
-# Sistema Educativo Vulnerable
+# Sistema Escolar Vulnerable
 
-Este es un sistema educativo intencionalmente vulnerable diseñado para fines educativos y de práctica de seguridad. El sistema incluye varias vulnerabilidades comunes que pueden ser explotadas para aprender sobre seguridad web.
+Este es un sistema escolar intencionalmente vulnerable diseñado para demostrar cómo una cadena de vulnerabilidades puede permitir a un estudiante modificar sus notas. El sistema implementa varias vulnerabilidades del OWASP Top 10 que pueden ser explotadas secuencialmente.
 
-## Características del Sistema
+## Escenario
 
-- Sistema de autenticación con diferentes roles (admin, monitor, estudiante, auditor)
-- Gestión de notas de estudiantes
-- Sistema de auditoría
-- Sistema de logs
-- Interfaz web moderna con Bootstrap
+En este sistema, tanto alumnos como profesores tienen sus respectivos usuarios. El objetivo es demostrar cómo, partiendo de un usuario con rol de alumno, se puede llegar a cambiar las notas de todos los exámenes a través de una cadena de vulnerabilidades.
 
-## Vulnerabilidades Intencionales
+## Cadena de Vulnerabilidades
 
-### 1. SQL Injection en Login
-El sistema utiliza consultas SQL sin parametrizar, permitiendo inyección SQL en el login:
-```sql
-' OR '1'='1
-```
+### 1. A02:2021 – Cryptographic Failures
+- **Vulnerabilidad**: JWT con algoritmo débil (HS256) y secret key predecible
+- **Explotación**: 
+  - El token JWT puede ser decodificado y modificado
+  - La secret key puede ser obtenida mediante fuerza bruta
+  - Permite modificar el rol en el token
 
-### 2. SQL Injection en Formulario de Auditoría
-El endpoint `/audit` es vulnerable a SQL injection y permite ejecutar múltiples statements. Ejemplo:
-```sql
-'); UPDATE grades SET grade = 10 WHERE student = 'Juan'; --
-```
+### 2. A04:2021 – Insecure Design
+- **Vulnerabilidad**: Validación de roles basada en el token JWT
+- **Explotación**:
+  - Modificación del rol en el token decodificado
+  - Acceso a endpoints restringidos
+  - Obtención de acceso a logs del sistema
 
-### 3. Almacenamiento Inseguro de Contraseñas
-- Uso de MD5 con salt estático
-- Las contraseñas se almacenan con un hash débil
-- El salt es predecible y estático
+### 3. A09:2021 – Security Logging and Monitoring Failures
+- **Vulnerabilidad**: Logs que contienen información sensible
+- **Explotación**:
+  - Los logs contienen hashes de contraseñas
+  - Exposición de credenciales de usuarios con privilegios
+  - Permite obtener credenciales de auditor
 
-### 4. Tokens JWT Inseguros
-- No hay expiración de tokens
-- Algoritmo de firma débil
-- Secret key predecible
+### 4. A02:2021 – Cryptographic Failures (Contraseñas)
+- **Vulnerabilidad**: Uso de MD5 con salt estático
+- **Explotación**:
+  - El salt es predecible y compartido
+  - Permite revertir hashes de contraseñas
+  - Obtención de credenciales de auditor
 
-### 5. Logging Inseguro
-- Almacenamiento de logs en memoria
-- Registro de información sensible
-- No hay rotación de logs
+### 5. A03:2021 – Injection
+- **Vulnerabilidad**: SQL Injection en formulario de auditoría
+- **Explotación**:
+  - Modificación de notas en la base de datos
+  - Ejemplo de payload:
+  ```sql
+  '); UPDATE grades SET grade = 10 WHERE student = 'Juan'; --
+  ```
 
 ## Cómo Ejecutar
 
+### Opción 1: Instalación Local
 1. Instalar dependencias:
 ```bash
 pip install -r requirements.txt
@@ -51,6 +58,17 @@ pip install -r requirements.txt
 python app.py
 ```
 
+### Opción 2: Usando Docker
+1. Construir la imagen:
+```bash
+docker build -t vulnerable-app .
+```
+
+2. Ejecutar el contenedor:
+```bash
+docker run -p 5001:5001 vulnerable-app
+```
+
 3. Acceder a http://localhost:5001
 
 ## Credenciales de Prueba
@@ -59,36 +77,6 @@ python app.py
 - Monitor: monitor/password
 - Estudiante: Juan/password
 - Auditor: auditor1/password
-
-## Ejemplos de Explotación
-
-### SQL Injection en Auditoría
-1. Iniciar sesión como auditor1/password
-2. En el formulario de auditoría, usar el payload:
-```sql
-'); UPDATE grades SET grade = 10 WHERE student = 'Juan'; --
-```
-3. Esto modificará todas las notas de Juan a 10
-
-### Ver Todas las Notas
-```sql
-'); SELECT * FROM grades; --
-```
-
-### Ver Todos los Usuarios
-```sql
-'); SELECT * FROM users; --
-```
-
-### Modificar Notas de Otros Estudiantes
-```sql
-'); UPDATE grades SET grade = 10 WHERE student = 'Juan'; --
-```
-
-### Eliminar Todos los Reportes
-```sql
-'); DELETE FROM audit_reports; --
-```
 
 ## Estructura de la Base de Datos
 
@@ -109,6 +97,28 @@ python app.py
 - report (TEXT)
 - timestamp (DATETIME)
 
+## Ejemplos de Explotación
+
+### 1. Obtención de Secret Key JWT
+```bash
+# Usar herramientas como jwt_tool o hashcat para fuerza bruta
+jwt_tool <token> -C -d wordlist.txt
+```
+
+### 2. Modificación de Rol en JWT
+```javascript
+// Decodificar token
+const token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...";
+const decoded = JSON.parse(atob(token.split('.')[1]));
+// Modificar rol
+decoded.role = "auditor";
+```
+
+### 3. SQL Injection en Auditoría
+```sql
+'); UPDATE grades SET grade = 10 WHERE student = 'Juan'; --
+```
+
 ## Notas de Seguridad
 
 ⚠️ **ADVERTENCIA**: Este sistema es intencionalmente vulnerable y NO debe ser utilizado en un entorno de producción. Está diseñado únicamente para fines educativos y de práctica de seguridad.
@@ -118,7 +128,7 @@ python app.py
 1. Uso de consultas parametrizadas
 2. Almacenamiento seguro de contraseñas (bcrypt, Argon2)
 3. Tokens JWT seguros con expiración
-4. Logging seguro
+4. Logging seguro sin información sensible
 5. Validación de entrada
 6. Protección contra CSRF
 7. Headers de seguridad
