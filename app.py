@@ -302,16 +302,11 @@ def get_logs():
     if error:
         return jsonify({"error": error}), 401
     
-    add_log(f"Acceso a logs: {payload.get('username')}")
+    # add_log(f"Acceso a logs: {payload.get('username')}")
     return jsonify({"logs": app_logs})
 
 @app.route('/admin/logs-page')
-def logs_page():
-    payload, error = check_auth(['admin', 'monitor'])
-    if error:
-        return redirect('/')
-    
-    add_log(f"Acceso a página de logs: {payload.get('username')}")
+def logs_page():    
     return render_template('logs.html')
 
 @app.route('/changeJwtRole', methods=['POST'])
@@ -366,10 +361,6 @@ def crack_hash():
 
 @app.route('/audit')
 def audit_page():
-    payload, error = check_auth_from_db(['auditor'])
-    if error:
-        return redirect('/')
-    add_log(f"Acceso a página de auditoría: {payload.get('username')}")
     return render_template('audit.html')
 
 @app.route('/audit', methods=['POST'])
