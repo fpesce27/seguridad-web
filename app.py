@@ -141,6 +141,37 @@ def check_auth(required_roles):
         return payload, None
     except:
         return None, "Token inválido"
+    
+def check_auth_from_db(required_roles):
+    """Función para verificar la autenticación y el rol del usuario desde la base de datos"""
+    conn = get_db()
+    c = conn.cursor()
+
+    token = request.headers.get('Authorization', '').replace('Bearer ', '')
+    if not token:
+        return None, "No token provided"
+    
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+        username = payload.get('username')
+        c.execute("SELECT * FROM users WHERE username = ?", (username,))
+        user = c.fetchone()
+        
+        if not user:
+            return None, "Usuario no encontrado"
+        
+        if user['role'] not in required_roles:
+            return None, "Acceso denegado"
+        
+        return dict(user), None
+    except:
+        return None, "Token inválido"
+    finally:
+        conn.close()
+    
+@app.errorhandler(404)
+def page_not_found(e):
+    return redirect('/')
 
 @app.route('/')
 def index():
@@ -160,8 +191,8 @@ def login():
     conn = get_db()
     c = conn.cursor()
     password_hash = hashlib.md5((password + SALT).encode()).hexdigest()
-    query = f"SELECT * FROM users WHERE username = '{username}' AND password_hash = '{password_hash}'"
-    c.execute(query)
+    query = "SELECT * FROM users WHERE username = ? AND password_hash = ?"
+    c.execute(query, (username, password_hash))
     user = c.fetchone()
     conn.close()
     
@@ -172,14 +203,14 @@ def login():
             'exp': datetime.utcnow() + timedelta(hours=24)
         }, JWT_SECRET, algorithm='HS256')
         
-        add_log(f"Login exitoso: {username} passwordHash: {password_hash}")
-        
         # Determinar la redirección según el rol
         redirect_url = "/dashboard"  # default
         if user['role'] == 'monitor':
             redirect_url = "/admin/logs-page"
         elif user['role'] == 'auditor':
             redirect_url = "/audit"
+        elif user['role'] == 'admin':
+            redirect_url = "/admin/logs-page"
         
         return jsonify({
             "message": "Login exitoso",
@@ -191,9 +222,41 @@ def login():
     add_log(f"Intento de login fallido: {username}")
     return jsonify({"error": "Credenciales inválidas"}), 401
 
+@app.route('/change-password', methods=['GET'])
+def change_password_template():
+    return render_template('change_password.html')
+
+@app.route('/change-password', methods=['POST'])
+def change_password():
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
+    new_password = data.get('new_password')
+
+    conn = get_db()
+    c = conn.cursor()
+    password_hash = hashlib.md5((password + SALT).encode()).hexdigest()
+    query = "SELECT * FROM users WHERE username = ? AND password_hash = ?"
+    c.execute(query, (username, password_hash))
+    user = c.fetchone()
+
+    if not user:
+        add_log(f"Intento de cambio de contraseña fallido: {username}")
+        conn.close()
+        return jsonify({"error": "Credenciales inválidas"}), 401
+
+    password_hash = hashlib.md5((new_password + SALT).encode()).hexdigest()
+    query = "UPDATE users SET password_hash = ? WHERE username = ?"
+    c.execute(query, (password_hash, username))
+    conn.commit()
+    conn.close()
+    add_log(f"Cambio de contraseña: {username} - nuevo hash de contraseña: {password_hash}")
+    return jsonify({"message": "Contraseña cambiada exitosamente"})
+    
+
 @app.route('/grades', methods=['GET'])
 def get_grades():
-    payload, error = check_auth(['admin', 'student'])
+    payload, error = check_auth_from_db(['student'])
     if error:
         return jsonify({"error": error}), 401
     
@@ -202,8 +265,8 @@ def get_grades():
         # Vulnerabilidad 5: SQL Injection en consulta de notas
         conn = get_db()
         c = conn.cursor()
-        query = f"SELECT subject, grade FROM grades WHERE student = '{username}'"
-        c.execute(query)
+        query = "SELECT subject, grade FROM grades WHERE student = ?"
+        c.execute(query, (username,))
         grades = {row['subject']: row['grade'] for row in c.fetchall()}
         conn.close()
         
@@ -213,7 +276,7 @@ def get_grades():
 
 @app.route('/grades', methods=['POST'])
 def update_grades():
-    payload, error = check_auth(['admin', 'student'])
+    payload, error = check_auth_from_db(['admin'])
     if error:
         return jsonify({"error": error}), 401
     
@@ -246,7 +309,7 @@ def get_logs():
 def logs_page():
     payload, error = check_auth(['admin', 'monitor'])
     if error:
-        return jsonify({"error": error}), 401
+        return redirect('/')
     
     add_log(f"Acceso a página de logs: {payload.get('username')}")
     return render_template('logs.html')
@@ -303,11 +366,15 @@ def crack_hash():
 
 @app.route('/audit')
 def audit_page():
+    payload, error = check_auth_from_db(['auditor'])
+    if error:
+        return redirect('/')
+    add_log(f"Acceso a página de auditoría: {payload.get('username')}")
     return render_template('audit.html')
 
 @app.route('/audit', methods=['POST'])
 def submit_audit():
-    payload, error = check_auth(['auditor'])
+    payload, error = check_auth_from_db(['auditor'])
     if error:
         return jsonify({"error": error}), 401
     
@@ -327,7 +394,7 @@ def submit_audit():
 
 @app.route('/api/audit-reports', methods=['GET'])
 def get_audit_reports():
-    payload, error = check_auth(['admin', 'auditor'])
+    payload, error = check_auth_from_db(['auditor'])
     if error:
         return jsonify({"error": error}), 401
     

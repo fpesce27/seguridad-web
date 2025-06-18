@@ -1,0 +1,5 @@
+## Ignore Python Virtual Environments
+venv/
+
+## Ignore sqlite database files
+*.db
