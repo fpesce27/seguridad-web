@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Administrar Notas de Usuarios</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <style>
+        .grade-input { width: 60px; }
+        .user-section { margin-bottom: 2rem; }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <h1 class="mb-4">Administrar Notas de Usuarios</h1>
+        <div id="gradesContainer"></div>
+        <div id="errorMessage" class="alert alert-danger mt-3" style="display:none;"></div>
+        <button class="btn btn-danger mt-3" onclick="logout()">Cerrar Sesión</button>
+    </div>
+    <script>
+        function logout() {
+            localStorage.removeItem("token");
+            window.location.href = "/";
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById("errorMessage");
+            errorDiv.textContent = message;
+            errorDiv.style.display = "block";
+        }
+
+        function fetchAllGrades() {
+            const token = localStorage.getItem("token");
+            fetch("/admin/all-grades", {
+                headers: { Authorization: `Bearer ${token}` }
+            })
+            .then(res => {
+                if (!res.ok) throw new Error("Error al cargar las notas");
+                return res.json();
+            })
+            .then(data => renderGrades(data.grades))
+            .catch(err => showError(err.message));
+        }
+
+        function renderGrades(gradesByUser) {
+            const container = document.getElementById("gradesContainer");
+            container.innerHTML = "";
+            for (const username in gradesByUser) {
+                const grades = gradesByUser[username];
+                const section = document.createElement("div");
+                section.className = "user-section";
+                section.innerHTML = `<h4>${username}</h4>`;
+                const table = document.createElement("table");
+                table.className = "table table-bordered";
+                table.innerHTML = `<thead><tr><th>Materia</th><th>Nota</th><th>Acción</th></tr></thead><tbody></tbody>`;
+                grades.forEach(g => {
+                    const tr = document.createElement("tr");
+                    tr.innerHTML = `
+                        <td>${g.subject}</td>
+                        <td><input type="number" min="1" max="10" value="${g.grade}" class="form-control grade-input" id="grade-${username}-${g.subject}"></td>
+                        <td><button class="btn btn-primary btn-sm" onclick="updateGrade('${username}', '${g.subject}')">Actualizar</button></td>
+                    `;
+                    table.querySelector("tbody").appendChild(tr);
+                });
+                section.appendChild(table);
+                container.appendChild(section);
+            }
+        }
+
+        function updateGrade(username, subject) {
+            const token = localStorage.getItem("token");
+            const input = document.getElementById(`grade-${username}-${subject}`);
+            const grade = input.value;
+            fetch("/admin/update-grade", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`
+                },
+                body: JSON.stringify({ username, subject, grade })
+            })
+            .then(res => {
+                if (!res.ok) throw new Error("Error al actualizar la nota");
+                return res.json();
+            })
+            .then(data => {
+                input.classList.add("is-valid");
+                setTimeout(() => input.classList.remove("is-valid"), 1000);
+            })
+            .catch(err => showError(err.message));
+        }
+
+        fetchAllGrades();
+    </script>
+</body>
+</html> 

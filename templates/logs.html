@@ -75,7 +75,7 @@
       function refreshLogs() {
         const token = localStorage.getItem("token");
 
-        fetch("/admin/logs", {
+        fetch("/logs", {
           headers: {
             Authorization: `Bearer ${token}`,
           },

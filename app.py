@@ -14,12 +14,11 @@ app = Flask(__name__)
 
 # Vulnerabilidad 1: Broken Access Control
 # El secreto JWT es débil y predecible
-JWT_SECRET = "secret_key"  # Vulnerabilidad 1: Clave JWT hardcodeada
+JWT_SECRET = "able"  # Vulnerabilidad 1: Clave JWT hardcodeada
 
 # Vulnerabilidad 4: Salt estático y débil
 SALT = "salt"  # Vulnerabilidad 4: Salt estático
 
-# Vulnerabilidad 5: Conexión a base de datos sin parámetros de configuración
 def get_db():
     conn = sqlite3.connect('audit.db')
     conn.row_factory = sqlite3.Row
@@ -64,10 +63,10 @@ def init_db():
     
     # Insertar usuarios iniciales con contraseñas en texto plano
     users_data = [
-        ("admin", "admin", "admin"),
-        ("monitor", "password", "monitor"),
+        ("admin", "Compl1c4t3edPa$S", "admin"),
+        ("monitor", "h4rdT0Gu3s5", "monitor"),
         ("Juan", "password", "student"),
-        ("auditor1", "password", "auditor")
+        ("auditor1", "riverplate", "auditor")
     ]
     
     # Convertir contraseñas a hash MD5 con salt
@@ -99,6 +98,23 @@ init_db()
 
 # Vulnerabilidad 3: Logging inseguro - Almacenamiento en memoria
 app_logs = []
+
+# Predefined mock logs for older activity
+app_logs.extend([
+    {"timestamp": "2024-05-01 09:15:23", "message": "POST /login - admin"},
+    {"timestamp": "2024-05-01 09:15:45", "message": "POST /change-password - admin"},
+    {"timestamp": "2024-05-01 09:16:00", "message": "Cambio de contraseña: admin - nuevo hash de contraseña: 25d0848fecfcd08aa57f6cf08c64f38c"},
+    {"timestamp": "2024-05-01 09:16:10", "message": "GET /grades - Juan"},
+    {"timestamp": "2024-05-01 09:17:45", "message": "POST /change-password - monitor"},
+    {"timestamp": "2024-05-01 09:18:20", "message": "Cambio de contraseña: monitor - nuevo hash de contraseña: f65bb14a4e4dcdb0395ed012c639e17e"},
+    {"timestamp": "2024-05-01 09:18:30", "message": "GET /admin/logs - admin"},
+    {"timestamp": "2024-05-01 09:19:05", "message": "POST /audit - auditor1"},
+    {"timestamp": "2024-05-01 09:20:00", "message": "POST /login - auditor1"},
+    {"timestamp": "2024-05-01 09:20:30", "message": "POST /change-password - auditor1"},
+    {"timestamp": "2024-05-01 09:21:05", "message": "Cambio de contraseña: auditor1 - nuevo hash de contraseña: f41bef2efd46b0f1e2315c3682b782bc"},
+    {"timestamp": "2024-05-01 09:21:12", "message": "GET /api/audit-reports - auditor1"},
+    {"timestamp": "2024-05-01 09:22:33", "message": "POST /grades - admin"},
+])
 
 def add_log(message):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -136,8 +152,19 @@ def check_auth(required_roles):
     
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
-        if payload.get('role') not in required_roles:
-            return None, "Acceso denegado"
+        username = payload.get('username')
+        role = payload.get('role')
+        # Extra check: if role is admin, verify in DB
+        if role == 'admin':
+            conn = get_db()
+            c = conn.cursor()
+            c.execute("SELECT role FROM users WHERE username = ?", (username,))
+            user = c.fetchone()
+            conn.close()
+            if not user or user['role'] != 'admin':
+                return None, "Acceso denegado."
+        if role not in required_roles:
+            return None, f"Acceso denegado. Roles permitidos: {', '.join(required_roles)}"
         return payload, None
     except:
         return None, "Token inválido"
@@ -161,7 +188,7 @@ def check_auth_from_db(required_roles):
             return None, "Usuario no encontrado"
         
         if user['role'] not in required_roles:
-            return None, "Acceso denegado"
+            return None, f"Acceso denegado. Roles permitidos: {', '.join(required_roles)}"
         
         return dict(user), None
     except:
@@ -171,7 +198,7 @@ def check_auth_from_db(required_roles):
     
 @app.errorhandler(404)
 def page_not_found(e):
-    return redirect('/')
+    return jsonify({"error": "Página no encontrada", "status": 404}), 404
 
 @app.route('/')
 def index():
@@ -210,7 +237,7 @@ def login():
         elif user['role'] == 'auditor':
             redirect_url = "/audit"
         elif user['role'] == 'admin':
-            redirect_url = "/admin/logs-page"
+            redirect_url = "/admin/grades"
         
         return jsonify({
             "message": "Login exitoso",
@@ -272,7 +299,7 @@ def get_grades():
         
         add_log(f"Acceso a notas: {username}")
         return jsonify({"grades": grades})
-    return jsonify({"error": "Acceso denegado"}), 403
+    return jsonify({"error": "Acceso denegado. Roles permitidos: student"}), 403
 
 @app.route('/grades', methods=['POST'])
 def update_grades():
@@ -296,7 +323,7 @@ def update_grades():
     add_log(f"Actualización de nota: {username} - {subject} = {grade}")
     return jsonify({"message": "Nota actualizada exitosamente"})
 
-@app.route('/admin/logs', methods=['GET'])
+@app.route('/logs', methods=['GET'])
 def get_logs():
     payload, error = check_auth(['admin', 'monitor'])
     if error:
@@ -359,7 +386,7 @@ def crack_hash():
     
     return jsonify({"found": False})
 
-@app.route('/audit')
+@app.route('/audit', methods=['GET'])
 def audit_page():
     return render_template('audit.html')
 
@@ -397,6 +424,58 @@ def get_audit_reports():
     
     add_log(f"Consulta de reportes de auditoría: {payload.get('username')}")
     return jsonify({"reports": reports})
+
+@app.route('/admin', methods=['GET'])
+def admin_users():
+    payload, error = check_auth(['admin'])
+    if error:
+        return jsonify({"error": error}), 401
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('SELECT username, role FROM users')
+    users = [dict(row) for row in c.fetchall()]
+    conn.close()
+    return jsonify({"users": users})
+
+@app.route('/admin/grades')
+def admin_grades_page():
+
+    return render_template('admin_grades.html')
+
+@app.route('/admin/all-grades', methods=['GET'])
+def admin_all_grades():
+    payload, error = check_auth(['admin'])
+    if error:
+        return jsonify({"error": error}), 401
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('SELECT student, subject, grade FROM grades')
+    grades = c.fetchall()
+    conn.close()
+    grades_by_user = {}
+    for row in grades:
+        grades_by_user.setdefault(row['student'], []).append({
+            'subject': row['subject'],
+            'grade': row['grade']
+        })
+    return jsonify({"grades": grades_by_user})
+
+@app.route('/admin/update-grade', methods=['POST'])
+def admin_update_grade():
+    payload, error = check_auth(['admin'])
+    if error:
+        return jsonify({"error": error}), 401
+    data = request.get_json()
+    username = data.get('username')
+    subject = data.get('subject')
+    grade = data.get('grade')
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('UPDATE grades SET grade = ? WHERE student = ? AND subject = ?', (grade, username, subject))
+    conn.commit()
+    conn.close()
+    add_log(f"Admin actualizó nota: {username} - {subject} = {grade}")
+    return jsonify({"message": "Nota actualizada exitosamente"})
 
 if __name__ == '__main__':
     # Asegurarse de que el directorio de logs existe
