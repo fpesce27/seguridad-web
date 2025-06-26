@@ -2,6 +2,8 @@
 
 2. Tratar de entrar a los endpoints. Están protegidos, pero nos dicen que hay un rol admin y un rol monitor
 
+3. Tirar una inyection en el login. Vemos que no funciona
+
 2. Checkear el JWT. Vemos que hay un campo rol adentro, así que lo tratamos de romper.
 
 4. Cambiamos el rol a admin, pero no nos deja entrar a nada. Parece tener chequeos
