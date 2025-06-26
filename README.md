@@ -1,4 +1,5 @@
 # Sistema Escolar Vulnerable
+![image](https://github.com/user-attachments/assets/098e5a33-86c9-4ae6-a9d6-6210e57b959c)
 
 Este es un sistema escolar intencionalmente vulnerable diseñado para demostrar cómo una cadena de vulnerabilidades puede permitir a un estudiante modificar sus notas. El sistema implementa varias vulnerabilidades del OWASP Top 10 que pueden ser explotadas secuencialmente.
 
